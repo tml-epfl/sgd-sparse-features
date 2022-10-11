@@ -6,7 +6,7 @@
 
 <!-- <p align="center"><img src="images/twitter.gif" width="400" /></p> -->
 <!-- <p align="center"><video src="images/twitter.mp4" controls="controls" style="max-width: 500px;"></video></p> -->
-<p align="center"><video src="https://user-images.githubusercontent.com/14852704/195183184-dca5111c-2093-429e-816f-ce25b4c3e2a0.mp4" controls="controls" autoplay="autoplay" style="max-width: 300px;"></video></p>
+<p align="center"><video width="400px" src="https://user-images.githubusercontent.com/14852704/195183184-dca5111c-2093-429e-816f-ce25b4c3e2a0.mp4" controls="controls" loop="true" autoplay="autoplay" controls muted></video></p>
 
 
 ## Abstract
