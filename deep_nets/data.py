@@ -3,7 +3,6 @@ import torch
 import torch.utils.data as td
 import numpy as np
 from torchvision import datasets, transforms
-from robustbench.data import load_cifar10c
 
 
 class DatasetWithLabelNoise(torch.utils.data.Dataset):
@@ -55,15 +54,6 @@ def dataset_gaussians_binary(*args, **kwargs):
 
     data = td.TensorDataset()
     data.data, data.targets = torch.from_numpy(x).float(), torch.from_numpy(y).long()
-    return data
-
-
-def dataset_cifar10c(*args, **kwargs):
-    dir_ = args[0]
-    x, y = load_cifar10c(data_dir=dir_, n_examples=150000, severity=5, shuffle=True)
-
-    data = td.TensorDataset()
-    data.data, data.targets = x, y.long()
     return data
 
 
@@ -238,8 +228,6 @@ datasets_dict = {'mnist': datasets.MNIST,
                  'cifar10': datasets.CIFAR10,
                  'cifar10_horse_car': datasets.CIFAR10,
                  'cifar10_dog_cat': datasets.CIFAR10,
-                 'cifar10c': dataset_cifar10c,
-                 'cifar10c_binary': dataset_cifar10c,
                  'cifar100': datasets.CIFAR100,
                  'uniform_noise': uniform_noise,
                  'gaussians_binary': dataset_gaussians_binary,

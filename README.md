@@ -24,8 +24,8 @@ The exact code to reproduce all the reported experiments on simple networks is a
 - `fc_nets_multi_layer.ipynb`: three-layer ReLU networks in a teacher-student setup.
 
 For deep networks, see folder `deep_nets` where the dependencies are collected in `Dockerfile`. Typical training commands for a ResNet-18 on CIFAR-10 would look like this:
-- Plain SGD without explicit regularization (loss stabilization is achieved via exponential warmup): `python train.py --dataset=cifar10 --lr_max=0.75 --lr_schedule=piecewise_05epochs --warmup_exp=1.05 --model=resnet18_plain --model_width=64 --epochs=100 --batch_size=256 --momentum=0.0 --l2_reg=0.0 --no_data_augm --eval_iter_freq=200 --exp_name=no_explicit_reg`
-- SGD + momentum in the state-of-the-art setting with data augmentation and weight decay: `python train.py --dataset=cifar10 --lr_max=0.05 --lr_schedule=piecewise_05epochs --model=resnet18_plain --model_width=64 --epochs=100 --batch_size=256 --momentum=0.9 --l2_reg=0.0005 --eval_iter_freq=200 --exp_name=sota_setting`
+- Plain SGD without explicit regularization (loss stabilization is achieved via exponential warmup): `python train.py --dataset=cifar10 --lr_init=0.75 --lr_schedule=piecewise_05epochs --warmup_exp=1.05 --model=resnet18_plain --model_width=64 --epochs=100 --batch_size=256 --momentum=0.0 --l2_reg=0.0 --no_data_augm --eval_iter_freq=200 --exp_name=no_explicit_reg`
+- SGD + momentum in the state-of-the-art setting with data augmentation and weight decay: `python train.py --dataset=cifar10 --lr_init=0.05 --lr_schedule=piecewise_05epochs --model=resnet18_plain --model_width=64 --epochs=100 --batch_size=256 --momentum=0.9 --l2_reg=0.0005 --eval_iter_freq=200 --exp_name=sota_setting`
 
 The step size schedule can be selected from [`constant`, `piecewise_01epochs`, `piecewise_03epochs`, `piecewise_05epochs`], see `utils_train.py` for more details.
 
