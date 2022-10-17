@@ -105,51 +105,6 @@ def get_lr_schedule(lr_schedule_type, n_epochs, lr, warmup_factor=1.0, warmup_ex
     return lr_schedule
 
 
-def get_delta_pgd(model, scaler, loss_f, X, y, eps, n_steps_pgd_curr, step_size_pgd_curr, args, use_pred_label=False):
-    if args.attack_init == 'zero':
-        delta = torch.zeros_like(X, requires_grad=True)
-    elif args.attack_init == 'random':
-        delta = get_random_delta(X.shape, eps, args.at_norm, requires_grad=True)
-        if args.dataset != 'gaussians_binary' and args.model != 'linear':
-            delta = clamp(X + delta.data, 0, 1) - X
-    else:
-        raise ValueError('wrong args.attack_init')
-
-    if args.universal_at:  # note: it's not the same as just averaging deltas bc of the normalization / sign step
-        delta = delta[0:1, :, :, :]
-
-    for _ in range(n_steps_pgd_curr):
-        with torch.cuda.amp.autocast(enabled=model.half_prec):
-            logits = model(X + delta)
-            y_adv = logits.max(1)[1].data if use_pred_label else y
-            loss = loss_f(logits, y_adv)
-
-        grad = torch.autograd.grad(scaler.scale(loss), delta)[0]
-        grad = grad.detach() / scaler.get_scale()
-
-        if args.at_norm == 'l2':
-            grad_norms = (grad ** 2).sum([1, 2, 3], keepdim=True) ** 0.5
-            grad_norms[grad_norms == 0] = np.inf  # to prevent division by zero
-            delta_next = delta.data + step_size_pgd_curr * grad / grad_norms  # step of normalized gradient ascent
-        elif args.at_norm == 'linf':
-            delta_next = delta.data + step_size_pgd_curr * torch.sign(grad)
-        else:
-            raise ValueError('wrong args.at_norm')
-        delta.data = project_lp(delta_next, args.at_norm, eps)
-        if args.dataset != 'gaussians_binary' and args.model != 'linear':
-            delta.data = clamp(X + delta.data, 0, 1) - X
-
-    return delta.detach()
-
-
-def warmup_schedule(n_epochs_warmup, iteration, batch_size, n_train_effective, binary=True):
-    n_iters_max = n_epochs_warmup * n_train_effective // batch_size
-    coeff = min(iteration / n_iters_max if n_iters_max != 0 else 1.0, 1.0)
-    if binary:
-        coeff = math.floor(coeff)
-    return coeff
-
-
 def change_bn_mode(model, bn_train):
     for module in model.modules():
         if isinstance(module, torch.nn.BatchNorm2d):

@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 from contextlib import contextmanager
 
@@ -25,6 +26,8 @@ def clamp(X, l, u, cuda=True):
 
 
 def configure_logger(model_name, debug):
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
     logging.basicConfig(format='%(message)s')  # , level=logging.DEBUG)
     logger = logging.getLogger()
     logger.handlers = []  # remove the default logger
@@ -87,15 +90,4 @@ def zero_grad(model):
     for p in model.parameters():
         if p.grad is not None:
             p.grad.zero_()
-
-
-def eval_f_val_grad(model, f):
-    zero_grad(model)
-
-    obj = f(model)  # grads are accumulated
-    obj.backward()
-    grad_norm = get_flat_grad(model).norm()
-
-    zero_grad(model)
-    return obj.detach(), grad_norm.detach()
 

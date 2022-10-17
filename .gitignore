@@ -2,3 +2,6 @@ plots
 .DS_Store
 __pycache__
 .mat
+
+deep_nets/exps/
+deep_nets/logs/

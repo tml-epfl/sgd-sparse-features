@@ -215,16 +215,27 @@ class ResNet(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, return_features=False, return_block=5):
+        assert return_block in [1, 2, 3, 4, 5], 'wrong return_block'
         # out = self.normalize(x)
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
+        if return_features and return_block == 1:
+            return out
         out = self.layer2(out)
+        if return_features and return_block == 2:
+            return out
         out = self.layer3(out)
+        if return_features and return_block == 3:
+            return out
         out = self.layer4(out)
+        if return_features and return_block == 4:
+            return out
         out = F.avg_pool2d(out, 4)
-        y = out.view(out.size(0), -1)
-        out = self.linear(y)
+        out = out.view(out.size(0), -1)
+        if return_features and return_block == 5:
+            return out
+        out = self.linear(out)
         return out
 
 
@@ -255,10 +266,11 @@ class PreActResNet(nn.Module):
         self.layer1 = self._make_layer(block, model_width, num_blocks[0], 1, droprate)
         self.layer2 = self._make_layer(block, 2*model_width, num_blocks[1], 2, droprate)
         self.layer3 = self._make_layer(block, 4*model_width, num_blocks[2], 2, droprate)
-        self.layer4 = self._make_layer(block, 8*model_width, num_blocks[3], 2, droprate)
-        self.bn = nn.BatchNorm2d(8*model_width*block.expansion) if self.bn_flag \
-            else nn.GroupNorm(self.gn_groups, 8*model_width*block.expansion)
-        self.linear = nn.Linear(8*model_width*block.expansion, 1 if n_cls == 2 else n_cls)
+        final_layer_factor = 8
+        self.layer4 = self._make_layer(block, final_layer_factor*model_width, num_blocks[3], 2, droprate)
+        self.bn = nn.BatchNorm2d(final_layer_factor*model_width*block.expansion) if self.bn_flag \
+            else nn.GroupNorm(self.gn_groups, final_layer_factor*model_width*block.expansion)
+        self.linear = nn.Linear(final_layer_factor*model_width*block.expansion, 1 if n_cls == 2 else n_cls)
 
     def _make_layer(self, block, planes, num_blocks, stride, droprate):
         strides = [stride] + [1]*(num_blocks-1)
@@ -270,7 +282,8 @@ class PreActResNet(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, return_features=False, return_block=5):        
+        assert return_block in [1, 2, 3, 4, 5], 'wrong return_block'
         for layer in [*self.layer1, *self.layer2, *self.layer3, *self.layer4]:
             layer.avg_preacts = []
 
@@ -278,12 +291,23 @@ class PreActResNet(nn.Module):
         out = self.normalize(x)
         out = self.conv1(out)
         out = self.layer1(out)
+        if return_features and return_block == 1:
+            return out
         out = self.layer2(out)
+        if return_features and return_block == 2:
+            return out
         out = self.layer3(out)
+        if return_features and return_block == 3:
+            return out
         out = self.layer4(out)
         out = F.relu(self.bn(out))
+        if return_features and return_block == 4:
+            return out
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
+        if return_features and return_block == 5:
+            return out
+        
         out = self.linear(out)
         if out.shape[1] == 1:
             out = torch.cat([torch.zeros_like(out), out], dim=1)
@@ -406,6 +430,10 @@ def TinyResNetGroupNorm(n_cls, model_width=64, cuda=True, half_prec=False, activ
                         activation=activation, droprate=droprate, bn_flag=bn_flag)
 
 
+def ResNet18(n_cls, model_width=64):
+    return ResNet(BasicBlockResNet34, [2, 2, 2, 2], num_classes=n_cls, model_width=model_width)
+
+
 def PreActResNet18(n_cls, model_width=64, cuda=True, half_prec=False, activation='relu', droprate=0.0):
     bn_flag = True
     return PreActResNet(PreActBlock, [2, 2, 2, 2], n_cls=n_cls, model_width=model_width, cuda=cuda, half_prec=half_prec,
@@ -441,12 +469,14 @@ def WideResNet28(n_cls, model_width=10):
 def get_model(model_name, n_cls, half_prec, shapes_dict, model_width, activation='relu', droprate=0.0):
     if model_name == 'resnet18':
         model = PreActResNet18(n_cls, model_width=model_width, half_prec=half_prec, activation=activation, droprate=droprate)
+    elif model_name == 'resnet18_plain':
+        model = ResNet18(n_cls, model_width)
     elif model_name == 'resnet18_gn':
         model = PreActResNet18GroupNorm(n_cls, model_width=model_width, half_prec=half_prec, activation=activation, droprate=droprate)
     elif model_name == 'vgg16':
         assert droprate == 0.0, 'dropout is not implemented for vgg16'
         model = VGG16(n_cls, model_width, half_prec)
-    elif model_name == 'resnet34':
+    elif model_name in ['resnet34', 'resnet34_plain']:
         model = ResNet34(n_cls, model_width)
     elif model_name == 'resnet34_gn':
         model = PreActResNet34GroupNorm(n_cls, model_width=model_width, half_prec=half_prec, activation=activation, droprate=droprate)
@@ -466,27 +496,7 @@ def get_model(model_name, n_cls, half_prec, shapes_dict, model_width, activation
 
 
 def init_weights(model, scale_init=0.0):
-    def init_weights_linear(m):
-        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-            # m.weight.data.zero_()
-            m.weight.data.normal_()
-            m.weight.data *= scale_init / (m.weight.data ** 2).sum()**0.5
-            if m.bias is not None:
-                m.bias.data.zero_()
-
     def init_weights_he(m):
-        # if isinstance(m, nn.Conv2d):
-        #     n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-        #     m.weight.data.normal_(0, math.sqrt(2. / n))
-        #     if m.bias is not None:
-        #         m.bias.data.zero_()
-        # elif isinstance(m, nn.Linear):
-        #     n = m.in_features
-        #     m.weight.data.normal_(0, math.sqrt(2. / n))
-        #     if m.bias is not None:
-        #         m.bias.data.zero_()
-
-        # From Rice et al.
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
         elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.GroupNorm):
@@ -495,10 +505,7 @@ def init_weights(model, scale_init=0.0):
         elif isinstance(m, nn.Linear):
             m.bias.data.zero_()
 
-    if model == 'linear':
-        return init_weights_linear
-    else:
-        return init_weights_he
+    return init_weights_he
 
 
 def forward_pass_rlat(model, x, deltas, layers):
@@ -519,107 +526,4 @@ def forward_pass_rlat(model, x, deltas, layers):
     for handle in handles:
         handle.remove()
     return out
-
-
-def get_rlat_layers(model, layers):
-    # import ipdb;ipdb.set_trace()
-    if layers == 'all':
-        return [model.normalize,
-                model.conv1,
-                model.layer1[0].bn1,
-                model.layer1[0].conv1,
-                model.layer1[0].bn2,
-                model.layer1[0].conv2,
-                model.layer1[1].bn1,
-                model.layer1[1].conv1,
-                model.layer1[1].bn2,
-                model.layer1[1].conv2,
-                model.layer1,
-                model.layer2[0].bn1,
-                model.layer2[0].conv1,
-                model.layer2[0].bn2,
-                model.layer2[0].conv2,
-                model.layer2[1].bn1,
-                model.layer2[1].conv1,
-                model.layer2[1].bn2,
-                model.layer2[1].conv2,
-                model.layer2,
-                model.layer3[0].bn1,
-                model.layer3[0].conv1,
-                model.layer3[0].bn2,
-                model.layer3[0].conv2,
-                model.layer3[1].bn1,
-                model.layer3[1].conv1,
-                model.layer3[1].bn2,
-                model.layer3[1].conv2,
-                model.layer3,
-                model.layer4[0].bn1,
-                model.layer4[0].conv1,
-                model.layer4[0].bn2,
-                model.layer4[0].conv2,
-                model.layer4[1].bn1,
-                model.layer4[1].conv1,
-                model.layer4[1].bn2,
-                model.layer4[1].conv2,
-                model.layer4,
-                model.bn,
-                ]
-    elif layers =='lpips':
-        return [model.conv1,
-                model.layer1,
-                model.layer2,
-                model.layer3,
-                model.layer4]
-    elif layers == 'bnonly':
-        return [model.normalize,
-                 model.layer1[0].bn1,
-                 model.layer1[0].bn2,
-                 model.layer1[1].bn1,
-                 model.layer1[1].bn2,
-                 model.layer2[0].bn1,
-                 model.layer2[0].bn2,
-                 model.layer2[1].bn1,
-                 model.layer2[1].bn2,
-                 model.layer3[0].bn1,
-                 model.layer3[0].bn2,
-                 model.layer3[1].bn1,
-                 model.layer3[1].bn2,
-                 model.layer4[0].bn1,
-                 model.layer4[0].bn2,
-                 model.layer4[1].bn1,
-                 model.layer4[1].bn2,
-                 model.bn
-           ]
-    elif layers == 'convonly':
-        return [model.normalize,
-                     model.conv1,
-                     model.layer1[0].conv1,
-                     model.layer1[0].conv2,
-                     model.layer1[1].conv1,
-                     model.layer1[1].conv2,
-                     model.layer2[0].conv1,
-                     model.layer2[0].conv2,
-                     model.layer2[1].conv1,
-                     model.layer2[1].conv2,
-                     model.layer3[0].conv1,
-                     model.layer3[0].conv2,
-                     model.layer3[1].conv1,
-                     model.layer3[1].conv2,
-                     model.layer4[0].conv1,
-                     model.layer4[0].conv2,
-                     model.layer4[1].conv1,
-                     model.layer4[1].conv2
-                     ]
-    elif layers == 'block0':
-        return [model.conv1]
-    elif layers == 'block1':
-        return [model.layer1]
-    elif layers == 'block2':
-        return [model.layer2]
-    elif layers == 'block3':
-        return [model.layer3]
-    elif layers == 'block4':
-        return [model.layer4]
-    else:
-        raise ValueError('wrong RLAT layers')
 
