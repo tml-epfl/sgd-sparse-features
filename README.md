@@ -2,6 +2,8 @@
 
 **Maksym Andriushchenko, Aditya Varre, Loucas Pillaud-Vivien, Nicolas Flammarion (EPFL)**
 
+**ICML 2023**
+
 **Paper:** [https://arxiv.org/abs/2210.05337](https://arxiv.org/abs/2210.05337)
 
 
